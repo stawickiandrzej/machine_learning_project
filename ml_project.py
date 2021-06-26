@@ -1,20 +1,30 @@
+from sklearn.metrics import classification_report
+from sklearn.metrics import make_scorer
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import StratifiedKFold
+from sklearn.pipeline import Pipeline
+from joblib import dump, load
+from sklearn.model_selection import train_test_split
+from sklearn.dummy import DummyClassifier
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
+import time
+import types
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import os
 import sys
 
 del sys.modules["os"]
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import types
-import time
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.decomposition import PCA
-from sklearn.dummy import DummyClassifier
-from sklearn.model_selection import train_test_split
-from joblib import dump, load
 
-dir_path = os.path.join("C:\\", "app", "python-scripts", "machine_learning", "project")
+
+dir_path = os.path.join("D:\\", "machine_learning_project")
 train_data_file = "train_data.csv"
 train_labels_file = "train_labels.csv"
 test_data_file = "test_data.csv"
@@ -141,18 +151,18 @@ if __name__ == "__main__":
     print(pca.explained_variance_ratio_.shape)
     (
         df_features_train,
-        df_targets_train,
         df_features_test,
+        df_targets_train,
         df_targets_test,
     ) = split_dataset(df_features, df_targets)
 
-    plt.rcParams["figure.figsize"] = (12,6)
+    plt.rcParams["figure.figsize"] = (12, 6)
 
     fig, ax = plt.subplots()
     xi = np.arange(1, 3558, step=1)
     y = np.cumsum(pca.explained_variance_ratio_)
 
-    plt.ylim(0.0,1.1)
+    plt.ylim(0.0, 1.1)
 
     plt.plot(xi, y, marker='o', linestyle='--', color='b')
 
@@ -162,7 +172,43 @@ if __name__ == "__main__":
     plt.title('The number of components needed to explain variance')
 
     plt.axhline(y=0.99, color='r', linestyle='-')
-    plt.text(0.5, 0.85, '99% cut-off threshold', color = 'red', fontsize=16)
+    plt.text(0.5, 0.85, '99% cut-off threshold', color='red', fontsize=16)
 
     ax.grid(axis='x')
     plt.show()
+
+
+log_reg_model = LogisticRegression()
+svc_model = SVC()
+
+pipe = Pipeline([("classifier", SVC())])
+
+search_space = [
+    {"classifier": [log_reg_model],
+     "classifier__solver": ['saga'],
+     "classifier__penalty": ['l2', 'elasticnet', "none"],
+     "classifier__class_weight": ["balanced", None],
+     "classifier__C": np.logspace(0, 4, 10),
+     "classifier__multi_class": ['ovr']},
+
+    {"classifier": [svc_model],
+     "classifier__kernel":["linear", "rbf", "poly"],
+     "classifier__class_weight": [None, "balanced"],
+     "classifier__gamma": [1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1],
+     "classifier__C": np.logspace(0, 4, 10)},
+]
+
+gridsearch = GridSearchCV(pipe, search_space, cv=3, verbose=2, n_jobs=-1)
+
+best_model = gridsearch.fit(df_features_train, df_targets_train)
+
+print(best_model.best_estimator_.get_params()["classifier"])
+
+print(gridsearch.best_params_)
+
+model = LogisticRegression(C=1, class_weight=None,
+                           multi_class='ovr', penalty='l2', solver='saga')
+
+prediction = model.predict(df_features_test)
+
+print(classification_report(df_targets_test, prediction))
